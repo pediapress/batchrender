@@ -5,22 +5,52 @@
 # See README.txt for additional licensing information.
 
 import os
+import py
 
-collection_list_location = 'collection_list'
-#update_frequency =
+log = py.log.Producer('config')
 
-output_basedir = os.path.expanduser('~/data/batchrender')
+class Config(object):
 
-writer = 'rl'
-file_ext = '.pdf'
+    def __init__(self):
+        self.collection_list_location = os.path.expanduser('batchrender_collections')
+        self.output_basedir = os.path.expanduser('~/')
+        self.writer = 'rl'
+        #update_frequency =
+
+        self.readrc()
+        self.collection_list = self.get_collection_list(self.collection_list_location)
+        self.file_ext = self.get_output_extension()
+        assert os.path.exists(self.output_basedir), 'ERROR: output directory does not exist: %s' % self.output_basedir
+
+    def readrc(self, path=None):
+        if path is None:
+            path = os.path.expanduser("~/.batchrender")
+            if not os.path.exists(path):
+                return
+        cfg = py.iniconfig.IniConfig(path, None)
+        if not cfg:
+            return
+        log('using config from', path)
+        for attr, val in cfg['main'].items():
+            if hasattr(self, attr):
+                log('setting : %s=%s' % (attr, val))
+                setattr(self, attr, val)
+
+    def get_collection_list(self, fn):
+        collection_list = []
+        for line in open(fn).readlines():
+            collection_info = line.strip().split('\t')
+            collection_list.append(collection_info)
+        return collection_list
+
+    def get_output_extension(self):
+        ext_map = {'rl':'pdf',
+               'zim':'zim'
+            }
+        assert self.writer in ext_map, 'ERROR: Invalid Writer'
+        return ext_map[self.writer]
 
 
-def get_collection_list(fn):
-    collection_list = []
-    for line in open(fn).readlines():
-        collection_info = line.strip().split('\t')
-        #expected format:
-        #config_url \t collection_title \t zim_file_name
-        collection_list.append(collection_info)
-    return collection_list
-collection_list = get_collection_list(collection_list_location)
+
+
+

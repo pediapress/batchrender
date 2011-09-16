@@ -6,9 +6,13 @@
 
 import subprocess
 import os
+import py
 
-import config
+from config import Config
 
+config = Config()
+
+log = py.log.Producer('batchrender')
 
 class BatchRender(object):
 
