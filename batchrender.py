@@ -9,7 +9,7 @@ import os
 import py
 import time
 from multiprocessing import Process
-
+import shutil
 
 from config import Config
 
@@ -26,9 +26,27 @@ class Collection(object):
         self.config_url = config_url.strip()
         self.collection_title = collection_title.strip()
         self.out_fn = os.path.join(config.output_basedir, out_fn.strip() + config.file_ext)
-        self.zip_fn = os.path.splitext(self.out_fn)[0] + '.zip'
-        self.fetch_log = os.path.splitext(self.out_fn)[0] + '_fetch.log'
-        self.render_log = os.path.splitext(self.out_fn)[0] + '_render.log'
+        self.zip_fn = self._get_path('.zip')
+        self.fetch_log = self._get_path('_fetch.log')
+        self.render_log = self._get_path('_render.log')
+
+    def _get_path(self, fn):
+        return os.path.splitext(self.out_fn)[0] + fn
+
+    def get_error_path(self, path):
+        fn = os.path.basename(path)
+        return os.path.join(config.error_dir, fn)
+
+    def report_error(self, cmd):
+        cmd_fn = self._get_path('.cmd')
+        open(cmd_fn, 'w').write(' '.join(cmd))
+
+        shutil.move(cmd_fn, self.get_error_path(cmd_fn))
+
+        for path in [self.fetch_log, self.render_log]:
+            if os.path.exists(path):
+                shutil.move(path, self.get_error_path(path))
+
 
 class BatchRender(object):
 
@@ -41,10 +59,7 @@ class BatchRender(object):
                              stderr=subprocess.PIPE)
 
         out, err = p.communicate()
-        if err:
-            log('ERROR command exited with error', err, cmd)
-            raise Exception
-
+        return err
 
     def fetch(self, collection):
         cmd = ['mw-zip',
@@ -54,8 +69,10 @@ class BatchRender(object):
                '-o', collection.zip_fn,
                '-x', # FIXME: noimages - speed up fetching while debugging
                ]
-        self.run_cmd(cmd)
-        assert os.path.exists(collection.zip_fn), 'ERROR: no zip file after fetching'
+        err = self.run_cmd(cmd)
+        if not os.path.exists(collection.zip_fn) or err:
+            collection.report_error(cmd)
+            raise Exception('ERROR while fetching')
 
     def render(self, collection):
         cmd = ['mw-render',
@@ -64,8 +81,11 @@ class BatchRender(object):
                '-o', collection.out_fn,
                '-l', collection.render_log,
             ]
-        self.run_cmd(cmd)
-        assert os.path.exists(collection.out_fn), 'ERROR: no output file after rendering'
+        err = self.run_cmd(cmd)
+        if not os.path.exists(collection.zip_fn) or err:
+            collection.report_error(cmd)
+            raise Exception('ERROR while fetching')
+
 
     def run(self):
         fetch_queue = [Collection(*collection_info) for collection_info in config.collection_list if not collection_info[0].startswith('#')]
@@ -82,7 +102,8 @@ class BatchRender(object):
                 if not p.is_alive():
                     fetch_active.remove(p)
                     log('fetching finished:', pid2col[p.pid].collection_title,'(', p.pid, 'exitcode', p.exitcode, ')')
-                    render_queue.append(pid2col[p.pid])
+                    if p.exitcode == 0:
+                        render_queue.append(pid2col[p.pid])
             
             while len(fetch_active) < config.max_parallel_fetch and fetch_queue:
                 collection = fetch_queue.pop()

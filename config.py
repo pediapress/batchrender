@@ -14,6 +14,7 @@ class Config(object):
     def __init__(self):
         self.collection_list_location = os.path.expanduser('batchrender_collections')
         self.output_basedir = os.path.expanduser('~/')
+        self.error_dir = os.path.expanduser('~/')
         self.writer = 'rl'
         self.max_parallel_fetch = 1
         self.max_parallel_render = 1
