@@ -30,6 +30,9 @@ class Collection(object):
         self.fetch_log = self._get_path('_fetch.log')
         self.render_log = self._get_path('_render.log')
 
+    def __str__(self):
+        return '<{0}>'.format(self.collection_title)
+
     def _get_path(self, fn):
         return os.path.splitext(self.out_fn)[0] + fn
 
@@ -47,6 +50,13 @@ class Collection(object):
             if os.path.exists(path):
                 shutil.move(path, self.get_error_path(path))
 
+
+    def clean(self):
+        for path in [self.zip_fn,
+                     self.fetch_log,
+                     self.render_log]:
+            if os.path.exists(path):
+                os.unlink(path)
 
 class BatchRender(object):
 
@@ -87,8 +97,19 @@ class BatchRender(object):
             raise Exception('ERROR while fetching')
 
 
+    def update_feed(self, collection):
+        cmd = ['kiwix-manage',
+               config.zim_feed_file,
+               'add', collection.out_fn
+               ]
+
+        err = self.run_cmd(cmd)
+        if err:
+            collection.report_error(cmd)
+            raise Exception('ERROR while updating zim feed data')
+
     def run(self):
-        fetch_queue = [Collection(*collection_info) for collection_info in config.collection_list if not collection_info[0].startswith('#')]
+        fetch_queue = [Collection(*collection_info) for collection_info in config.collection_list]
         fetch_active = []
 
         render_queue = []
@@ -101,7 +122,9 @@ class BatchRender(object):
             for p in fetch_active:
                 if not p.is_alive():
                     fetch_active.remove(p)
-                    log('fetching finished:', pid2col[p.pid].collection_title,'(', p.pid, 'exitcode', p.exitcode, ')')
+                    log('fetching finished:',
+                        pid2col[p.pid],
+                        '(', p.pid, 'exitcode', p.exitcode, ')')
                     if p.exitcode == 0:
                         render_queue.append(pid2col[p.pid])
             
@@ -110,15 +133,24 @@ class BatchRender(object):
                 p = Process(target=self.fetch, args=(collection,))
                 p.start()
                 fetch_active.append(p)
-                log('fetching started', collection.collection_title, '(', p.pid, ')')
+                log('fetching started',
+                    collection,
+                    '(', p.pid, ')')
                 pid2col[p.pid] = collection
 
             # RENDER
 
             for p in render_active:
                 if not p.is_alive():
+                    collection = pid2col[p.pid]
+                    collection.clean()
                     render_active.remove(p)
-                    log('rendering finished:', pid2col[p.pid].collection_title,'(', p.pid, 'exitcode', p.exitcode, ')')
+                    log('rendering finished:',
+                        collection,
+                        '(', p.pid, 'exitcode', p.exitcode, ')')
+                    if p.exitcode == 0 and config.generate_zim_feed and config.writer == 'zim':
+                        self.update_feed(collection)
+                        log('updated zim feed', collection)
                 
             while len(render_active) < config.max_parallel_render and render_queue:
                 collection = render_queue.pop()
@@ -129,7 +161,7 @@ class BatchRender(object):
                 pid2col[p.pid] = collection
 
             time.sleep(5)
-            
+
 
 if __name__ == '__main__':
     br = BatchRender()

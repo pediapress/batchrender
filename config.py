@@ -18,6 +18,8 @@ class Config(object):
         self.writer = 'rl'
         self.max_parallel_fetch = 1
         self.max_parallel_render = 1
+        self.generate_zim_feed = True
+        self.zim_feed_file = ''
 
         self.readrc()
         self.collection_list = self.get_collection_list(self.collection_list_location)
@@ -36,17 +38,23 @@ class Config(object):
         for attr, val in cfg['main'].items():
             if hasattr(self, attr):
                 log('setting : %s=%s' % (attr, val))
-                if isinstance(getattr(self, attr), int):
+                if getattr(self, attr).__class__ == int:
                     cast = lambda x: int(x)
+                elif getattr(self, attr).__class__ ==  bool:
+                    cast = lambda x: True if x in ['True', '1'] else False
                 else:
                     cast = lambda x:x
-
                 setattr(self, attr, cast(val))
 
     def get_collection_list(self, fn):
         collection_list = []
         for line in open(fn).readlines():
+            if line.startswith('#'):
+                continue
             collection_info = line.strip().split('\t')
+            if len(collection_info) != 3:
+                log('ERROR: collection info invalid:', collection_info)
+                continue
             collection_list.append(collection_info)
         return collection_list
 
