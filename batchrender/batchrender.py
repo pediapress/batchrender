@@ -10,6 +10,9 @@ import py
 import time
 from multiprocessing import Process
 import shutil
+import argparse
+import urlparse
+
 
 from config import Config
 
@@ -63,6 +66,10 @@ class BatchRender(object):
     def __init__(self):
         pass
 
+    @property
+    def collections(self):
+        return [Collection(*collection_info) for collection_info in config.collection_list]
+
     def run_cmd(self, cmd):
         p = subprocess.Popen(cmd,
                              stdout=subprocess.PIPE,
@@ -98,9 +105,11 @@ class BatchRender(object):
 
 
     def update_feed(self, collection):
+        url = urlparse.urljoin(config.zim_base_url, os.path.basename(collection.out_fn))
         cmd = ['kiwix-manage',
                config.zim_feed_file,
-               'add', collection.out_fn
+               'add', collection.out_fn,
+               url
                ]
 
         err = self.run_cmd(cmd)
@@ -108,8 +117,12 @@ class BatchRender(object):
             collection.report_error(cmd)
             raise Exception('ERROR while updating zim feed data')
 
+    def create_feed(self):
+        for collection in self.collections:
+            self.update_feed(collection)
+
     def run(self):
-        fetch_queue = [Collection(*collection_info) for collection_info in config.collection_list]
+        fetch_queue = self.collections
         fetch_active = []
 
         render_queue = []
@@ -149,7 +162,7 @@ class BatchRender(object):
                         collection,
                         '(', p.pid, 'exitcode', p.exitcode, ')')
                     if p.exitcode == 0 and config.generate_zim_feed and config.writer == 'zim':
-                        self.update_feed(collection)
+                        self.update_feed(collection) # blocking call, but it should be fast
                         log('updated zim feed', collection)
                 
             while len(render_active) < config.max_parallel_render and render_queue:
@@ -162,7 +175,18 @@ class BatchRender(object):
 
             time.sleep(5)
 
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--createfeed', action='store_true')
+    args = parser.parse_args()
+
+    br = BatchRender()
+
+    if args.createfeed:
+        br.create_feed()
+    else:
+        br.run()
 
 if __name__ == '__main__':
-    br = BatchRender()
-    br.run()
+    main()

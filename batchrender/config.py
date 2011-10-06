@@ -20,11 +20,17 @@ class Config(object):
         self.max_parallel_render = 1
         self.generate_zim_feed = True
         self.zim_feed_file = ''
+        self.zim_base_url = ''
 
         self.readrc()
         self.collection_list = self.get_collection_list(self.collection_list_location)
         self.file_ext = self.get_output_extension()
-        assert os.path.exists(self.output_basedir), 'ERROR: output directory does not exist: %s' % self.output_basedir
+        self.make_dirs()
+
+    def make_dirs(self):
+        for path in [self.output_basedir, self.error_dir]:
+            if not os.path.exists(path):
+                os.makedirs(path)
 
     def readrc(self, path=None):
         if path is None:
