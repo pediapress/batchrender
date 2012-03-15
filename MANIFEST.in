@@ -1,0 +1,6 @@
+include MANIFEST.in
+include README.txt
+include batchrender/__init__.py
+include batchrender/batchrender.py
+include batchrender/config.py
+include setup.py
