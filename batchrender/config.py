@@ -12,7 +12,7 @@ log = py.log.Producer('config')
 class Config(object):
 
     def __init__(self):
-        self.collection_list_location = os.path.expanduser('batchrender_collections')
+        self.collection_list_location = os.path.expanduser('~/batchrender_collections')
         self.output_basedir = os.path.expanduser('~/')
         self.error_dir = os.path.expanduser('~/')
         self.writer = 'rl'
